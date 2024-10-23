@@ -1,0 +1,14 @@
+[Unit]
+Description=DiscordBot
+After=network.target
+
+[Service]
+WorkingDirectory=/home/bean/discord_bot
+ExecStart=/home/bean/discord_bot/venv/bin/python /home/bean/discord_bot/bot.py
+Restart=always
+RestartSec=10
+User=bean
+Environment="PYTHONUNBUFFERED=1"
+
+[Install]
+WantedBy=multi-user.target
