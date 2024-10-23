@@ -16,6 +16,7 @@ c_prefix = "$"
 # Set up the bot
 intents = discord.Intents.default()
 intents.messages = True
+intents.message_content = True
 intents.guilds = True
 bot = commands.Bot(command_prefix=c_prefix, intents=intents)
 
