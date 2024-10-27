@@ -9,11 +9,13 @@ import asyncio
 
 class ReminderBot(commands.Bot):
     SETTINGS_FILE = "settings.json"
+    DEFAULT_MESSAGE = "@everyone remember to post your standup at {time}!"
 
     def __init__(self, command_prefix, intents):
         super().__init__(command_prefix=command_prefix, intents=intents)
         self.c_prefix = command_prefix
         self.military_time = False
+        self.send_on_weekends = False
         self.load_settings()
 
     def load_settings(self):
@@ -23,16 +25,21 @@ class ReminderBot(commands.Bot):
         except (FileNotFoundError, json.JSONDecodeError):
             self.settings = {
                 "channel_name": None,
-                "hour": 14,
+                "hour": 14,  # Default to 2:00 PM
                 "minute": 0,
-            }  # Default to 2:00 PM
+                "custom_message": None,
+            }
 
-    def save_settings(self, channel_name=None, hour=None, minute=None):
+    def save_settings(
+        self, channel_name=None, hour=None, minute=None, custom_message=None
+    ):
         if channel_name is not None:
             self.settings["channel_name"] = channel_name
         if hour is not None and minute is not None:
             self.settings["hour"] = hour
             self.settings["minute"] = minute
+        if custom_message is not None:
+            self.settings["custom_message"] = custom_message
         with open(self.SETTINGS_FILE, "w") as file:
             json.dump(self.settings, file)
 
@@ -41,6 +48,12 @@ class ReminderBot(commands.Bot):
 
     def disable_24H(self):
         self.military_time = False
+
+    def enable_weekends(self):
+        self.send_on_weekends = True
+
+    def disable_weekends(self):
+        self.send_on_weekends = False
 
     async def get_time_until_reminder(self):
         current_time = datetime.now()
@@ -62,15 +75,13 @@ class ReminderBot(commands.Bot):
         cur_time = datetime.now()
         date = cur_time.strftime("%m/%d")
 
-        # Skip weekends
-        if cur_time.weekday() >= 5:
+        # Skip weekends - if specified
+        if not self.send_on_weekends and cur_time.weekday() >= 5:
             return
 
         channel_name = self.settings.get("channel_name")
         if channel_name is None:
-            print(
-                f"Error: No channel has been set. Use the `{self.c_prefix}setchannel` command to set one."
-            )
+            print(f"Error: No channel has been set. Use the `{self.c_prefix}setchannel` command to set one.")
             return
 
         # Search for the channel
@@ -85,12 +96,13 @@ class ReminderBot(commands.Bot):
                         time_msg = f"{int(h)-12}:{m}pm"
                     else:
                         time_msg = f"{h}:{m}am"
-                message = await channel.send(
-                    f"@everyone remember to post your standup at {time_msg}!"
-                )
-                await message.create_thread(
-                    name=f"{date} Standup", auto_archive_duration=60
-                )
+
+                custom_message = self.settings.get("custom_message")
+                message_content = custom_message or self.DEFAULT_MESSAGE.format(time=time_msg)
+                message = await channel.send(message_content)
+
+                if not custom_message:
+                    await message.create_thread(name=f"{date} Standup", auto_archive_duration=60)
                 return
         print(f"Error: No channel named '{channel_name}' found.")
 
@@ -100,10 +112,7 @@ class ReminderBot(commands.Bot):
             self.send_daily_message.start()
 
     async def is_moderator_check(self, ctx):
-        return (
-            ctx.author.guild_permissions.manage_messages
-            or ctx.author.guild_permissions.ban_members
-        )
+        return (ctx.author.guild_permissions.manage_messages or ctx.author.guild_permissions.ban_members)
 
 
 def main():
@@ -115,7 +124,17 @@ def main():
     @commands.command(name="setchannel")
     async def set_channel(ctx, *, channel_name: str):
         ctx.bot.save_settings(channel_name=channel_name)
-        await ctx.send(f"Reminder channel set to #{channel_name}")
+        await ctx.send(f"Reminder channel set to #{channel_name}.")
+
+    @commands.command(name="setmessage")
+    async def set_message(ctx, *, new_message: str):
+        ctx.bot.save_settings(custom_message=new_message)
+        await ctx.send("Custom message updated.")
+
+    @commands.command(name="resetmessage")
+    async def reset_message(ctx):
+        ctx.bot.save_settings(custom_message=None)
+        await ctx.send("Message reset to default.")
 
     @commands.command(name="settime")
     async def set_time(ctx, time_str: str):
@@ -131,12 +150,22 @@ def main():
     @commands.command(name="enable24H")
     async def enable_24H_format(ctx):
         ctx.bot.enable_24H()
-        await ctx.send("24H time format enabled")
+        await ctx.send("24H time format enabled.")
 
     @commands.command(name="disable24H")
     async def disable_24H_format(ctx):
         ctx.bot.disable_24H()
-        await ctx.send("12H time format enabled")
+        await ctx.send("12H time format enabled.")
+
+    @commands.command(name="enableweekends")
+    async def enable_weekends(ctx):
+        ctx.bot.enable_weekends()
+        await ctx.send("Sending reminders on weekends enabled.")
+
+    @commands.command(name="disableweekends")
+    async def disable_weekends(ctx):
+        ctx.bot.disable_weekends()
+        await ctx.send("Sending reminders on weekends disabled.")
 
     # Setting up the bot and adding commands
     intents = discord.Intents.default()
@@ -150,8 +179,12 @@ def main():
 
     bot.add_command(set_channel)
     bot.add_command(set_time)
+    bot.add_command(set_message)
+    bot.add_command(reset_message)
     bot.add_command(enable_24H_format)
     bot.add_command(disable_24H_format)
+    bot.add_command(enable_weekends)
+    bot.add_command(disable_weekends)
 
     # Start bot
     bot.run(TOKEN)
