@@ -1,11 +1,10 @@
-import json
-import os
-import discord
 from discord.ext import tasks, commands
 from dotenv import load_dotenv
 from datetime import datetime, timedelta
+import discord
 import asyncio
-
+import json
+import os
 
 class ReminderBot(commands.Bot):
     SETTINGS_FILE = "settings.json"
@@ -89,13 +88,16 @@ class ReminderBot(commands.Bot):
             channel = discord.utils.get(guild.text_channels, name=channel_name)
             if channel:
                 h, m = self.settings.get("hour"), self.settings.get("minute")
+
                 if self.military_time:
-                    time_msg = f"{h}:{m}"
+                    time_msg = f"{h}:{m:02}"  
                 else:
-                    if h > 12:
-                        time_msg = f"{int(h)-12}:{m}pm"
+                    period = "pm" if h >= 12 else "am"
+                    hour_12 = h % 12 if h % 12 != 0 else 12
+                    if m == 0:
+                        time_msg = f"{hour_12}{period}"
                     else:
-                        time_msg = f"{h}:{m}am"
+                        time_msg = f"{hour_12}:{m:02}{period}" 
 
                 custom_message = self.settings.get("custom_message")
                 message_content = custom_message or self.DEFAULT_MESSAGE.format(time=time_msg)
@@ -167,6 +169,22 @@ def main():
         ctx.bot.disable_weekends()
         await ctx.send("Sending reminders on weekends disabled.")
 
+    @commands.command(name="help")
+    async def help_command(ctx):
+        help_info = (
+            "__Here are the available commands:__\n"
+            f"**{ctx.prefix}setchannel <channel_name>** - Set the channel where reminders will be sent.\n"
+            f"**{ctx.prefix}settime <HH:MM>** - Set the reminder time in 24-hour format.\n"
+            f"**{ctx.prefix}enable24H** - Enable 24-hour time format for reminders.\n"
+            f"**{ctx.prefix}disable24H** - Disable 24-hour time format for reminders. Will use 12-hour time format instead.\n"
+            f"**{ctx.prefix}enableweekends** - Allow reminders on weekends.\n"
+            f"**{ctx.prefix}disableweekends** - Disable reminders on weekends.\n"
+            f"**{ctx.prefix}setmessage <message>** - Set a custom reminder message.\n"
+            f"**{ctx.prefix}resetmessage** - Reset the reminder message to default.\n"
+            f"**{ctx.prefix}help** - Display this help message."
+        )
+        await ctx.send(help_info)
+
     # Setting up the bot and adding commands
     intents = discord.Intents.default()
     intents.messages = True
@@ -185,6 +203,7 @@ def main():
     bot.add_command(disable_24H_format)
     bot.add_command(enable_weekends)
     bot.add_command(disable_weekends)
+    bot.add_command(help_command)
 
     # Start bot
     bot.run(TOKEN)
