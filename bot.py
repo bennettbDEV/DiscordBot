@@ -69,7 +69,8 @@ class ReminderBot(commands.Bot):
     @tasks.loop(hours=24)
     async def send_daily_message(self):
         await self.wait_until_ready()
-        await asyncio.sleep(await self.get_time_until_reminder())
+        delay = await self.get_time_until_reminder()
+        await asyncio.sleep(delay)
 
         cur_time = datetime.now()
         date = cur_time.strftime("%m/%d")
@@ -203,7 +204,7 @@ def main():
     bot.add_command(disable_24H_format)
     bot.add_command(enable_weekends)
     bot.add_command(disable_weekends)
-    bot.add_command(help_command)
+    # bot.add_command(help_command)
 
     # Start bot
     bot.run(TOKEN)
